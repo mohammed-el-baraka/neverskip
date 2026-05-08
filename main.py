@@ -95,7 +95,7 @@ class LockScreen(QMainWindow):
             Qt.WindowType.FramelessWindowHint |
             Qt.WindowType.X11BypassWindowManagerHint
         )
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        
         self.update_stylesheet()
         
         central_widget = QWidget()
@@ -151,22 +151,23 @@ class LockScreen(QMainWindow):
         
     def update_stylesheet(self):
         opacity = self.config.get("opacity", 0.95)
-        self.setStyleSheet(f"""
-            QMainWindow {{ background-color: rgba(30, 30, 30, {opacity}); }}
-            QLabel {{ color: #e0e0e0; }}
-            QLabel#mainTask {{
+        self.setWindowOpacity(opacity)
+        self.setStyleSheet("""
+            QMainWindow { background-color: #1e1e1e; }
+            QLabel { color: #e0e0e0; }
+            QLabel#mainTask {
                 color: #a371f7; font-weight: bold; font-family: 'Segoe UI', 'Inter', sans-serif;
-            }}
-            QLabel#otherTasks {{
+            }
+            QLabel#otherTasks {
                 color: #d4d4d4; font-family: 'Segoe UI', 'Inter', monospace;
-            }}
-            QPushButton {{
+            }
+            QPushButton {
                 background-color: #0e639c; color: white;
                 border: none; padding: 15px 40px;
                 font-size: 20px; font-weight: bold; border-radius: 8px;
-            }}
-            QPushButton:disabled {{ background-color: #333333; color: #888888; }}
-            QPushButton:hover:!disabled {{ background-color: #1177bb; }}
+            }
+            QPushButton:disabled { background-color: #333333; color: #888888; }
+            QPushButton:hover:!disabled { background-color: #1177bb; }
         """)
         
     def start_lock(self):
