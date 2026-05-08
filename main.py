@@ -2,7 +2,7 @@ import sys
 import json
 from pathlib import Path
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
-                             QHBoxLayout, QTextEdit, QPushButton, QLabel, 
+                             QHBoxLayout, QTextEdit, QLineEdit, QPushButton, QLabel, 
                              QSystemTrayIcon, QMenu, QDialog, QSpinBox, QMessageBox)
 from PyQt6.QtCore import Qt, QTimer, pyqtSlot, QObject
 from PyQt6.QtGui import QFont, QIcon, QAction
@@ -15,7 +15,9 @@ SOCKET_NAME = "neverskip_single_instance_socket"
 
 DEFAULT_CONFIG = {
     "duration": 10,
-    "tasks": "## Today's Focus\n\n- [ ] Review pending pull requests\n- [ ] Hydrate\n- [ ] Focus work block"
+    "opacity": 0.95,
+    "main_task": "Review pending pull requests",
+    "tasks": "## Other Focus\n\n- Hydrate\n- Focus work block"
 }
 
 def load_config():
@@ -40,7 +42,7 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         self.config = config
         self.setWindowTitle("NeverSkip Settings")
-        self.setFixedSize(300, 120)
+        self.setMinimumSize(400, 300)
         
         layout = QVBoxLayout(self)
         
@@ -50,7 +52,26 @@ class SettingsDialog(QDialog):
         self.duration_spinbox.setRange(1, 300)
         self.duration_spinbox.setValue(self.config.get("duration", 10))
         h_layout.addWidget(self.duration_spinbox)
+        
+        h_layout.addWidget(QLabel("Opacity (%):"))
+        self.opacity_spinbox = QSpinBox()
+        self.opacity_spinbox.setRange(10, 100)
+        self.opacity_spinbox.setValue(int(self.config.get("opacity", 0.95) * 100))
+        h_layout.addWidget(self.opacity_spinbox)
         layout.addLayout(h_layout)
+
+        layout.addWidget(QLabel("Most Important Task:"))
+        self.main_task_edit = QLineEdit()
+        self.main_task_edit.setText(self.config.get("main_task", ""))
+        self.main_task_edit.setFont(QFont("Inter", 12))
+        layout.addWidget(self.main_task_edit)
+        
+        layout.addWidget(QLabel("Other Tasks:"))
+        self.tasks_edit = QTextEdit()
+        self.tasks_edit.setAcceptRichText(False)
+        self.tasks_edit.setPlainText(self.config.get("tasks", ""))
+        self.tasks_edit.setFont(QFont("Inter", 11))
+        layout.addWidget(self.tasks_edit)
         
         save_btn = QPushButton("Save")
         save_btn.clicked.connect(self.save_settings)
@@ -58,6 +79,9 @@ class SettingsDialog(QDialog):
         
     def save_settings(self):
         self.config["duration"] = self.duration_spinbox.value()
+        self.config["opacity"] = self.opacity_spinbox.value() / 100.0
+        self.config["main_task"] = self.main_task_edit.text()
+        self.config["tasks"] = self.tasks_edit.toPlainText()
         save_config(self.config)
         self.accept()
 
@@ -71,23 +95,10 @@ class LockScreen(QMainWindow):
             Qt.WindowType.FramelessWindowHint |
             Qt.WindowType.X11BypassWindowManagerHint
         )
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.update_stylesheet()
         
-        self.setStyleSheet("""
-            QMainWindow { background-color: #1e1e1e; }
-            QLabel { color: #e0e0e0; }
-            QTextEdit {
-                background-color: #1e1e1e; color: #e0e0e0;
-                border: none; font-family: 'Segoe UI', 'Inter', monospace;
-                font-size: 24px; line-height: 1.6; padding: 20px;
-            }
-            QPushButton {
-                background-color: #0e639c; color: white;
-                border: none; padding: 15px 40px;
-                font-size: 20px; font-weight: bold; border-radius: 8px;
-            }
-            QPushButton:disabled { background-color: #333333; color: #888888; }
-            QPushButton:hover:!disabled { background-color: #1177bb; }
-        """)
+        central_widget = QWidget()
 
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -97,13 +108,28 @@ class LockScreen(QMainWindow):
         header_label = QLabel("NeverSkip")
         header_label.setFont(QFont("Inter", 14, QFont.Weight.Bold))
         header_label.setStyleSheet("color: #777777;")
+        header_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         main_layout.addWidget(header_label)
         
-        self.text_edit = QTextEdit()
-        self.text_edit.setAcceptRichText(False)
-        self.text_edit.setPlainText(self.config.get("tasks", ""))
-        self.text_edit.textChanged.connect(self.on_text_changed)
-        main_layout.addWidget(self.text_edit)
+        main_layout.addStretch()
+
+        self.main_task_label = QLabel()
+        self.main_task_label.setObjectName("mainTask")
+        self.main_task_label.setFont(QFont("Inter", 36))
+        self.main_task_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.main_task_label.setWordWrap(True)
+        main_layout.addWidget(self.main_task_label)
+        
+        main_layout.addSpacing(40)
+        
+        self.tasks_label = QLabel()
+        self.tasks_label.setObjectName("otherTasks")
+        self.tasks_label.setFont(QFont("Inter", 20))
+        self.tasks_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.tasks_label.setWordWrap(True)
+        main_layout.addWidget(self.tasks_label)
+
+        main_layout.addStretch()
         
         bottom_layout = QHBoxLayout()
         self.timer_label = QLabel("Waiting...")
@@ -123,13 +149,33 @@ class LockScreen(QMainWindow):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_timer)
         
+    def update_stylesheet(self):
+        opacity = self.config.get("opacity", 0.95)
+        self.setStyleSheet(f"""
+            QMainWindow {{ background-color: rgba(30, 30, 30, {opacity}); }}
+            QLabel {{ color: #e0e0e0; }}
+            QLabel#mainTask {{
+                color: #a371f7; font-weight: bold; font-family: 'Segoe UI', 'Inter', sans-serif;
+            }}
+            QLabel#otherTasks {{
+                color: #d4d4d4; font-family: 'Segoe UI', 'Inter', monospace;
+            }}
+            QPushButton {{
+                background-color: #0e639c; color: white;
+                border: none; padding: 15px 40px;
+                font-size: 20px; font-weight: bold; border-radius: 8px;
+            }}
+            QPushButton:disabled {{ background-color: #333333; color: #888888; }}
+            QPushButton:hover:!disabled {{ background-color: #1177bb; }}
+        """)
+        
     def start_lock(self):
         self.config = load_config()
+        self.update_stylesheet()
         self.remaining_time = self.config.get("duration", 10)
-        current_text = self.text_edit.toPlainText()
-        config_text = self.config.get("tasks", "")
-        if current_text != config_text:
-            self.text_edit.setPlainText(config_text)
+        
+        self.main_task_label.setText(self.config.get("main_task", ""))
+        self.tasks_label.setText(self.config.get("tasks", ""))
             
         self.continue_btn.setDisabled(True)
         self.update_timer_label()
@@ -139,10 +185,6 @@ class LockScreen(QMainWindow):
         self.activateWindow()
         
         self.timer.start(1000)
-
-    def on_text_changed(self):
-        self.config["tasks"] = self.text_edit.toPlainText()
-        save_config(self.config)
 
     def update_timer(self):
         self.remaining_time -= 1
@@ -181,7 +223,7 @@ class NeverSkipLogic(QObject):
         self.tray_icon.setToolTip("NeverSkip")
         
         tray_menu = QMenu()
-        show_action = QAction("Edit Tasks / Lock Screen", self.app)
+        show_action = QAction("Lock Screen", self.app)
         show_action.triggered.connect(self.lock_screen.start_lock)
         tray_menu.addAction(show_action)
         
