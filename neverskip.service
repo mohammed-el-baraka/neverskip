@@ -1,0 +1,17 @@
+[Unit]
+Description=NeverSkip Task Reminder Daemon
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 %h/.local/share/neverskip/main.py
+Restart=on-failure
+RestartSec=5
+Environment=DISPLAY=:0
+Environment=WAYLAND_DISPLAY=wayland-0
+Environment=XDG_CURRENT_DESKTOP=ubuntu:GNOME
+Environment=QT_QPA_PLATFORM=wayland;xcb
+
+[Install]
+WantedBy=default.target
