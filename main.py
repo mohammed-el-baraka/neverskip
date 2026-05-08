@@ -3,7 +3,8 @@ import json
 from pathlib import Path
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QTextEdit, QLineEdit, QPushButton, QLabel, 
-                             QSystemTrayIcon, QMenu, QDialog, QSpinBox, QMessageBox)
+                             QSystemTrayIcon, QMenu, QDialog, QSpinBox, QMessageBox,
+                             QSlider, QFrame)
 from PyQt6.QtCore import Qt, QTimer, pyqtSlot, QObject
 from PyQt6.QtGui import QFont, QIcon, QAction
 from PyQt6.QtDBus import QDBusConnection, QDBusMessage
@@ -54,10 +55,12 @@ class SettingsDialog(QDialog):
         h_layout.addWidget(self.duration_spinbox)
         
         h_layout.addWidget(QLabel("Opacity (%):"))
-        self.opacity_spinbox = QSpinBox()
-        self.opacity_spinbox.setRange(10, 100)
-        self.opacity_spinbox.setValue(int(self.config.get("opacity", 0.95) * 100))
-        h_layout.addWidget(self.opacity_spinbox)
+        self.opacity_slider = QSlider(Qt.Orientation.Horizontal)
+        self.opacity_slider.setRange(10, 100)
+        self.opacity_slider.setValue(int(self.config.get("opacity", 0.95) * 100))
+        self.opacity_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        self.opacity_slider.setTickInterval(10)
+        h_layout.addWidget(self.opacity_slider)
         layout.addLayout(h_layout)
 
         layout.addWidget(QLabel("Most Important Task:"))
@@ -79,7 +82,7 @@ class SettingsDialog(QDialog):
         
     def save_settings(self):
         self.config["duration"] = self.duration_spinbox.value()
-        self.config["opacity"] = self.opacity_spinbox.value() / 100.0
+        self.config["opacity"] = self.opacity_slider.value() / 100.0
         self.config["main_task"] = self.main_task_edit.text()
         self.config["tasks"] = self.tasks_edit.toPlainText()
         save_config(self.config)
@@ -95,14 +98,15 @@ class LockScreen(QMainWindow):
             Qt.WindowType.FramelessWindowHint |
             Qt.WindowType.X11BypassWindowManagerHint
         )
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        
+        self.bg_frame = QFrame()
+        self.bg_frame.setObjectName("bgFrame")
+        self.setCentralWidget(self.bg_frame)
         
         self.update_stylesheet()
-        
-        central_widget = QWidget()
 
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-        main_layout = QVBoxLayout(central_widget)
+        main_layout = QVBoxLayout(self.bg_frame)
         main_layout.setContentsMargins(100, 80, 100, 80)
         
         header_label = QLabel("NeverSkip")
@@ -151,23 +155,24 @@ class LockScreen(QMainWindow):
         
     def update_stylesheet(self):
         opacity = self.config.get("opacity", 0.95)
-        self.setWindowOpacity(opacity)
-        self.setStyleSheet("""
-            QMainWindow { background-color: #1e1e1e; }
-            QLabel { color: #e0e0e0; }
-            QLabel#mainTask {
+        alpha = int(opacity * 255)
+        self.setStyleSheet(f"""
+            QFrame#bgFrame {{ background-color: rgba(30, 30, 30, {alpha}); }}
+            QLabel {{ color: #e0e0e0; background-color: transparent; }}
+            QLabel#mainTask {{
                 color: #a371f7; font-weight: bold; font-family: 'Segoe UI', 'Inter', sans-serif;
-            }
-            QLabel#otherTasks {
+            }}
+            QLabel#otherTasks {{
                 color: #d4d4d4; font-family: 'Segoe UI', 'Inter', monospace;
-            }
-            QPushButton {
+                background-color: transparent;
+            }}
+            QPushButton {{
                 background-color: #0e639c; color: white;
                 border: none; padding: 15px 40px;
                 font-size: 20px; font-weight: bold; border-radius: 8px;
-            }
-            QPushButton:disabled { background-color: #333333; color: #888888; }
-            QPushButton:hover:!disabled { background-color: #1177bb; }
+            }}
+            QPushButton:disabled {{ background-color: #333333; color: #888888; }}
+            QPushButton:hover:!disabled {{ background-color: #1177bb; }}
         """)
         
     def start_lock(self):
